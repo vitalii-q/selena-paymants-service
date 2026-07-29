@@ -1,0 +1,9 @@
+FROM maven:3.9.9-eclipse-temurin-17
+
+WORKDIR /app
+COPY pom.xml .
+RUN mvn --no-transfer-progress dependency:go-offline
+COPY src ./src
+
+EXPOSE 9069
+CMD ["mvn", "spring-boot:run", "-Dspring-boot.run.profiles=dev"]
