@@ -1,1 +1,116 @@
-databaseChangeLog: []
+databaseChangeLog:
+  - changeSet:
+      id: 1-create-payments-table
+      author: vitalii-q
+      changes:
+        - createTable:
+            tableName: payments
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_payments
+                    nullable: false
+              - column:
+                  name: booking_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: decimal(19,2)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: currency
+                  type: varchar(3)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: idempotency_key
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: provider_transaction_id
+                  type: varchar(255)
+              - column:
+                  name: failure_code
+                  type: varchar(100)
+              - column:
+                  name: failure_reason
+                  type: varchar(500)
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 2-add-payments-constraints
+      author: vitalii-q
+      changes:
+        - sql:
+            sql: >-
+              ALTER TABLE payments ADD CONSTRAINT chk_payments_amount_positive
+              CHECK (amount > 0)
+        - sql:
+            sql: >-
+              ALTER TABLE payments ADD CONSTRAINT chk_payments_currency
+              CHECK (currency = 'EUR')
+        - sql:
+            sql: >-
+              ALTER TABLE payments ADD CONSTRAINT chk_payments_status
+              CHECK (status IN ('PENDING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'REFUNDED'))
+        - addUniqueConstraint:
+            tableName: payments
+            columnNames: user_id, idempotency_key
+            constraintName: uk_payments_user_idempotency_key
+
+  - changeSet:
+      id: 3-add-payments-query-indexes
+      author: vitalii-q
+      changes:
+        - createIndex:
+            tableName: payments
+            indexName: idx_payments_booking_id
+            columns:
+              - column:
+                  name: booking_id
+        - createIndex:
+            tableName: payments
+            indexName: idx_payments_user_id
+            columns:
+              - column:
+                  name: user_id
+        - createIndex:
+            tableName: payments
+            indexName: idx_payments_status
+            columns:
+              - column:
+                  name: status
+        - createIndex:
+            tableName: payments
+            indexName: idx_payments_created_at
+            columns:
+              - column:
+                  name: created_at

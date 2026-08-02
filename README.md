@@ -7,15 +7,39 @@ separate Spring Boot microservice and will own its own database.
 
 - Java 17, Spring Boot 3.4.3 and Maven
 - Spring Web, Validation, JPA, Liquibase, Actuator and Prometheus
-- MariaDB as the service-owned database; Testcontainers MariaDB for integration tests
+- PostgreSQL as the service-owned database; Testcontainers PostgreSQL for integration tests
 - Development profile: port `9069`; production profile: port `9087`
-- The development MariaDB container is mapped to host port `9269`.
+- The development PostgreSQL container is mapped to host port `9269`.
 
-Start locally with a configured MariaDB datasource:
+Start locally with a configured PostgreSQL datasource:
 
 ```bash
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
+
+Start the isolated development containers:
+
+```bash
+docker build --no-cache -f Dockerfile.dev -t selena-payments-service:latest .
+docker run -d --name payments-db -p 9269:5432 \
+  --env-file .env --network selena-dev_app_network \
+  -v payments-postgres-data:/var/lib/postgresql/data postgres:16
+docker run -d --name payments-service -p 9069:9069 \
+  --env-file .env --network selena-dev_app_network \
+  -v $(pwd):/app -v payments-maven-cache:/root/.m2 \
+  selena-payments-service:latest
+```
+
+The API is available on `http://localhost:9069`; PostgreSQL is exposed locally on
+`localhost:9269`.
+
+When started through `Dockerfile.dev`, the entrypoint waits for PostgreSQL,
+creates the service database and user if necessary, validates the Liquibase
+changelog and then applies pending migrations before starting Spring Boot.
+It requires `PAYMENTS_POSTGRES_HOST`, `PAYMENTS_POSTGRES_DB_NAME`,
+`POSTGRES_PASSWORD`, `SPRING_DATASOURCE_USERNAME` and
+`SPRING_DATASOURCE_PASSWORD`; `PAYMENTS_POSTGRES_PORT_INNER` defaults to
+`3306` and `ROOT_USER` defaults to `root`.
 
 ## Scope and ownership
 

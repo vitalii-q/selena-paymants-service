@@ -1,9 +1,52 @@
+# payments-service/Dockerfile.dev
+
+# Build the development image:
+# docker build --no-cache -f Dockerfile.dev -t selena-payments-service:latest .
+#
+# Start PostgreSQL for the payment service:
+# docker run -d --name payments-db -p 9269:5432 --env-file .env \
+#   --network selena-dev_app_network -v payments-postgres-data:/var/lib/postgresql/data \
+#   postgres:16
+#
+# Start the payment service. The entrypoint validates and applies Liquibase
+# migrations before starting Spring Boot:
+# docker run -d --name payments-service -p 9069:9069 --env-file .env --network selena-dev_app_network -v $(pwd):/app -v payments-maven-cache:/root/.m2 selena-payments-service:latest
+#
+# Follow service logs:
+# docker logs -f payments-service
+
 FROM maven:3.9.9-eclipse-temurin-17
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client \
+    netcat-openbsd \
+    curl \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /opt/liquibase && \
+    curl -fsSL https://github.com/liquibase/liquibase/releases/download/v4.26.0/liquibase-4.26.0.tar.gz \
+    | tar -xz -C /opt/liquibase && \
+    ln -s /opt/liquibase/liquibase /usr/local/bin/liquibase
+
 WORKDIR /app
+
+# Copy the Maven configuration first, so Docker can cache downloaded dependencies.
 COPY pom.xml .
 RUN mvn --no-transfer-progress dependency:go-offline
+RUN mkdir -p /opt/payments/libs && \
+    mvn --no-transfer-progress dependency:copy \
+    -Dartifact=org.postgresql:postgresql:42.7.5 \
+    -DoutputDirectory=/opt/payments/libs
+
+# The entrypoint validates and applies Liquibase migrations before Spring Boot starts.
+COPY _docker/entrypoint.sh /app/_docker/entrypoint.sh
+RUN chmod +x /app/_docker/entrypoint.sh
+RUN mkdir -p /liquibase/db
+COPY src/main/resources/db /liquibase/db
 COPY src ./src
 
+# Expose the development HTTP port.
 EXPOSE 9069
+ENTRYPOINT ["/app/_docker/entrypoint.sh"]
 CMD ["mvn", "spring-boot:run", "-Dspring-boot.run.profiles=dev"]
