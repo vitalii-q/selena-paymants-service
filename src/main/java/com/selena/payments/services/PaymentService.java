@@ -7,6 +7,8 @@ import com.selena.payments.exceptions.BusinessException;
 import com.selena.payments.exceptions.IdempotencyConflictException;
 import com.selena.payments.exceptions.PaymentNotFoundException;
 import com.selena.payments.mappers.PaymentMapper;
+import com.selena.payments.outbox.PaymentEventType;
+import com.selena.payments.outbox.PaymentOutboxPublisher;
 import com.selena.payments.providers.PaymentProvider;
 import com.selena.payments.providers.PaymentProviderRequest;
 import com.selena.payments.providers.PaymentProviderResult;
@@ -28,12 +30,14 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
     private final PaymentProvider paymentProvider;
+    private final PaymentOutboxPublisher paymentOutboxPublisher;
 
     public PaymentService(PaymentRepository paymentRepository, PaymentMapper paymentMapper,
-                          PaymentProvider paymentProvider) {
+                          PaymentProvider paymentProvider, PaymentOutboxPublisher paymentOutboxPublisher) {
         this.paymentRepository = paymentRepository;
         this.paymentMapper = paymentMapper;
         this.paymentProvider = paymentProvider;
+        this.paymentOutboxPublisher = paymentOutboxPublisher;
     }
 
     @Transactional
@@ -61,8 +65,24 @@ public class PaymentService {
                     );
                     if (providerResult.success()) {
                         payment.markSucceeded(providerResult.providerTransactionId());
+                        paymentOutboxPublisher.publish(
+                                payment.getId(),
+                                payment.getBookingId(),
+                                payment.getUserId(),
+                                payment.getAmount(),
+                                payment.getCurrency(),
+                                PaymentEventType.PAYMENT_SUCCEEDED
+                        );
                     } else {
                         payment.markFailed(providerResult.failureCode(), providerResult.failureReason());
+                        paymentOutboxPublisher.publish(
+                                payment.getId(),
+                                payment.getBookingId(),
+                                payment.getUserId(),
+                                payment.getAmount(),
+                                payment.getCurrency(),
+                                PaymentEventType.PAYMENT_FAILED
+                        );
                     }
                     return paymentMapper.toResponse(paymentRepository.save(payment));
                 });
@@ -87,6 +107,14 @@ public class PaymentService {
 
         PaymentEntity payment = findPayment(paymentId);
         payment.markSucceeded(providerTransactionId);
+        paymentOutboxPublisher.publish(
+                payment.getId(),
+                payment.getBookingId(),
+                payment.getUserId(),
+                payment.getAmount(),
+                payment.getCurrency(),
+                PaymentEventType.PAYMENT_SUCCEEDED
+        );
         return paymentMapper.toResponse(payment);
     }
 
@@ -98,6 +126,14 @@ public class PaymentService {
 
         PaymentEntity payment = findPayment(paymentId);
         payment.markFailed(failureCode, failureReason);
+        paymentOutboxPublisher.publish(
+                payment.getId(),
+                payment.getBookingId(),
+                payment.getUserId(),
+                payment.getAmount(),
+                payment.getCurrency(),
+                PaymentEventType.PAYMENT_FAILED
+        );
         return paymentMapper.toResponse(payment);
     }
 
@@ -112,6 +148,14 @@ public class PaymentService {
     public PaymentResponse refundPayment(UUID paymentId) {
         PaymentEntity payment = findPayment(paymentId);
         payment.refund();
+        paymentOutboxPublisher.publish(
+                payment.getId(),
+                payment.getBookingId(),
+                payment.getUserId(),
+                payment.getAmount(),
+                payment.getCurrency(),
+                PaymentEventType.PAYMENT_REFUNDED
+        );
         return paymentMapper.toResponse(payment);
     }
 

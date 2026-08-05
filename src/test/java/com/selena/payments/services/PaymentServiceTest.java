@@ -7,6 +7,8 @@ import com.selena.payments.entities.PaymentStatus;
 import com.selena.payments.exceptions.BusinessException;
 import com.selena.payments.exceptions.IdempotencyConflictException;
 import com.selena.payments.mappers.PaymentMapper;
+import com.selena.payments.outbox.PaymentEventType;
+import com.selena.payments.outbox.PaymentOutboxPublisher;
 import com.selena.payments.providers.PaymentProvider;
 import com.selena.payments.providers.PaymentProviderResult;
 import com.selena.payments.repositories.PaymentRepository;
@@ -25,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,6 +44,9 @@ class PaymentServiceTest {
     @Mock
     private PaymentProvider paymentProvider;
 
+    @Mock
+    private PaymentOutboxPublisher paymentOutboxPublisher;
+
     @InjectMocks
     private PaymentService paymentService;
 
@@ -51,7 +57,7 @@ class PaymentServiceTest {
     @BeforeEach
     void setUp() {
         paymentMapper = new PaymentMapper();
-        paymentService = new PaymentService(paymentRepository, paymentMapper, paymentProvider);
+        paymentService = new PaymentService(paymentRepository, paymentMapper, paymentProvider, paymentOutboxPublisher);
         request = validRequest();
         idempotencyKey = UUID.randomUUID();
     }
@@ -73,6 +79,14 @@ class PaymentServiceTest {
         ArgumentCaptor<PaymentEntity> captor = ArgumentCaptor.forClass(PaymentEntity.class);
         verify(paymentProvider).process(any());
         verify(paymentRepository).save(captor.capture());
+        verify(paymentOutboxPublisher).publish(
+                any(UUID.class),
+                eq(request.getBookingId()),
+                eq(request.getUserId()),
+                eq(request.getAmount()),
+                eq("EUR"),
+                eq(PaymentEventType.PAYMENT_SUCCEEDED)
+        );
         assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
         assertThat(captor.getValue().getCurrency()).isEqualTo("EUR");
         assertThat(response.status()).isEqualTo(PaymentStatus.SUCCEEDED);
