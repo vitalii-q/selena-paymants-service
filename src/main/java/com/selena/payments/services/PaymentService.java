@@ -7,7 +7,12 @@ import com.selena.payments.exceptions.BusinessException;
 import com.selena.payments.exceptions.IdempotencyConflictException;
 import com.selena.payments.exceptions.PaymentNotFoundException;
 import com.selena.payments.mappers.PaymentMapper;
+import com.selena.payments.providers.PaymentProvider;
+import com.selena.payments.providers.PaymentProviderRequest;
+import com.selena.payments.providers.PaymentProviderResult;
 import com.selena.payments.repositories.PaymentRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -22,10 +27,13 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final PaymentMapper paymentMapper;
+    private final PaymentProvider paymentProvider;
 
-    public PaymentService(PaymentRepository paymentRepository, PaymentMapper paymentMapper) {
+    public PaymentService(PaymentRepository paymentRepository, PaymentMapper paymentMapper,
+                          PaymentProvider paymentProvider) {
         this.paymentRepository = paymentRepository;
         this.paymentMapper = paymentMapper;
+        this.paymentProvider = paymentProvider;
     }
 
     @Transactional
@@ -43,6 +51,19 @@ public class PaymentService {
                             currency,
                             idempotencyKey
                     );
+                    PaymentProviderResult providerResult = paymentProvider.process(
+                            new PaymentProviderRequest(
+                                    request.getPaymentToken(),
+                                    request.getPaymentMethod(),
+                                    request.getAmount(),
+                                    currency
+                            )
+                    );
+                    if (providerResult.success()) {
+                        payment.markSucceeded(providerResult.providerTransactionId());
+                    } else {
+                        payment.markFailed(providerResult.failureCode(), providerResult.failureReason());
+                    }
                     return paymentMapper.toResponse(paymentRepository.save(payment));
                 });
     }
@@ -50,6 +71,12 @@ public class PaymentService {
     @Transactional(readOnly = true)
     public PaymentResponse findById(UUID paymentId) {
         return paymentMapper.toResponse(findPayment(paymentId));
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PaymentResponse> findByBookingId(Long bookingId, Pageable pageable) {
+        return paymentRepository.findAllByBookingId(bookingId, pageable)
+                .map(paymentMapper::toResponse);
     }
 
     @Transactional
@@ -106,8 +133,9 @@ public class PaymentService {
 
     private void validateCreateRequest(CreatePaymentRequest request, UUID idempotencyKey) {
         if (request == null || request.getBookingId() == null || request.getUserId() == null
-                || request.getAmount() == null || !StringUtils.hasText(request.getCurrency())) {
-            throw new BusinessException("INVALID_PAYMENT_REQUEST", "Booking, user, amount and currency are required");
+                || request.getAmount() == null || !StringUtils.hasText(request.getCurrency())
+                || !StringUtils.hasText(request.getPaymentToken()) || !StringUtils.hasText(request.getPaymentMethod())) {
+            throw new BusinessException("INVALID_PAYMENT_REQUEST", "Booking, user, amount, currency, payment token and payment method are required");
         }
         if (request.getBookingId() <= 0) {
             throw new BusinessException("INVALID_BOOKING_ID", "Booking id must be greater than 0");

@@ -4,6 +4,11 @@ spring:
   jackson:
     property-naming-strategy: SNAKE_CASE
 
+payments:
+  provider:
+    stub:
+      mode: SUCCESS
+
 management:
   endpoints:
     web:

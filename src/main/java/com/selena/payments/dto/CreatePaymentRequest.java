@@ -25,13 +25,23 @@ public class CreatePaymentRequest {
     @NotBlank(message = "currency is required")
     private String currency;
 
+    @NotBlank(message = "paymentToken is required")
+    private String paymentToken;
+
+    @NotBlank(message = "paymentMethod is required")
+    private String paymentMethod;
+
     public Long getBookingId() { return bookingId; }
     public UUID getUserId() { return userId; }
     public BigDecimal getAmount() { return amount; }
     public String getCurrency() { return currency; }
+    public String getPaymentToken() { return paymentToken; }
+    public String getPaymentMethod() { return paymentMethod; }
 
     public void setBookingId(Long bookingId) { this.bookingId = bookingId; }
     public void setUserId(UUID userId) { this.userId = userId; }
     public void setAmount(BigDecimal amount) { this.amount = amount; }
     public void setCurrency(String currency) { this.currency = currency; }
+    public void setPaymentToken(String paymentToken) { this.paymentToken = paymentToken; }
+    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
 }

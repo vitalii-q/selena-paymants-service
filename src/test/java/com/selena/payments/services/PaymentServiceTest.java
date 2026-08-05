@@ -7,6 +7,8 @@ import com.selena.payments.entities.PaymentStatus;
 import com.selena.payments.exceptions.BusinessException;
 import com.selena.payments.exceptions.IdempotencyConflictException;
 import com.selena.payments.mappers.PaymentMapper;
+import com.selena.payments.providers.PaymentProvider;
+import com.selena.payments.providers.PaymentProviderResult;
 import com.selena.payments.repositories.PaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,9 @@ class PaymentServiceTest {
     @Mock
     private PaymentRepository paymentRepository;
 
+    @Mock
+    private PaymentProvider paymentProvider;
+
     @InjectMocks
     private PaymentService paymentService;
 
@@ -46,24 +51,32 @@ class PaymentServiceTest {
     @BeforeEach
     void setUp() {
         paymentMapper = new PaymentMapper();
-        paymentService = new PaymentService(paymentRepository, paymentMapper);
+        paymentService = new PaymentService(paymentRepository, paymentMapper, paymentProvider);
         request = validRequest();
         idempotencyKey = UUID.randomUUID();
     }
 
     @Test
-    void createPayment_shouldCreatePendingPayment() {
+    void createPayment_shouldCreatePaymentAndCallProvider() {
         when(paymentRepository.findByUserIdAndIdempotencyKey(request.getUserId(), idempotencyKey))
                 .thenReturn(Optional.empty());
+        when(paymentProvider.process(any())).thenReturn(new PaymentProviderResult(
+                true,
+                "stub_tx_123",
+                null,
+                null
+        ));
         when(paymentRepository.save(any(PaymentEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PaymentResponse response = paymentService.createPayment(request, idempotencyKey);
 
         ArgumentCaptor<PaymentEntity> captor = ArgumentCaptor.forClass(PaymentEntity.class);
+        verify(paymentProvider).process(any());
         verify(paymentRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(captor.getValue().getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
         assertThat(captor.getValue().getCurrency()).isEqualTo("EUR");
-        assertThat(response.status()).isEqualTo(PaymentStatus.PENDING);
+        assertThat(response.status()).isEqualTo(PaymentStatus.SUCCEEDED);
+        assertThat(response.providerTransactionId()).isEqualTo("stub_tx_123");
     }
 
     @Test
@@ -75,6 +88,7 @@ class PaymentServiceTest {
         PaymentResponse response = paymentService.createPayment(request, idempotencyKey);
 
         assertThat(response.id()).isEqualTo(existing.getId());
+        verify(paymentProvider, never()).process(any());
         verify(paymentRepository, never()).save(any());
     }
 
@@ -139,6 +153,8 @@ class PaymentServiceTest {
         value.setUserId(UUID.randomUUID());
         value.setAmount(new BigDecimal("10.00"));
         value.setCurrency("eur");
+        value.setPaymentToken("test-payment-token");
+        value.setPaymentMethod("TEST_METHOD");
         return value;
     }
 
