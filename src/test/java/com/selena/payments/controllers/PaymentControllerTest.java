@@ -44,7 +44,8 @@ class PaymentControllerTest {
         request.setPaymentToken("test-token");
         request.setPaymentMethod("TEST_METHOD");
 
-        when(paymentService.createPayment(any(CreatePaymentRequest.class), any(UUID.class)))
+        UUID authenticatedUserId = request.getUserId();
+        when(paymentService.createPayment(any(CreatePaymentRequest.class), any(UUID.class), any(UUID.class)))
                 .thenReturn(new PaymentResponse(
                         UUID.randomUUID(),
                         42L,
@@ -61,6 +62,7 @@ class PaymentControllerTest {
 
         mockMvc.perform(post("/api/payments")
                         .header("Idempotency-Key", UUID.randomUUID())
+                        .header("X-Authenticated-Userid", authenticatedUserId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated());
@@ -69,10 +71,11 @@ class PaymentControllerTest {
     @Test
     void getPaymentByIdShouldReturnOk() throws Exception {
         UUID paymentId = UUID.randomUUID();
-        when(paymentService.findById(paymentId)).thenReturn(new PaymentResponse(
+        UUID authenticatedUserId = UUID.randomUUID();
+        when(paymentService.findById(paymentId, authenticatedUserId)).thenReturn(new PaymentResponse(
                 paymentId,
                 42L,
-                UUID.randomUUID(),
+                authenticatedUserId,
                 new BigDecimal("10.00"),
                 "EUR",
                 PaymentStatus.PENDING,
@@ -83,7 +86,8 @@ class PaymentControllerTest {
                 LocalDateTime.now()
         ));
 
-        mockMvc.perform(get("/api/payments/{id}", paymentId))
+        mockMvc.perform(get("/api/payments/{id}", paymentId)
+                        .header("X-Authenticated-Userid", authenticatedUserId))
                 .andExpect(status().isOk());
     }
 }
