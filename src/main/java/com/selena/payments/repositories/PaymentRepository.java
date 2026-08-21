@@ -14,5 +14,5 @@ public interface PaymentRepository extends JpaRepository<PaymentEntity, UUID> {
 
     Optional<PaymentEntity> findByUserIdAndIdempotencyKey(UUID userId, UUID idempotencyKey);
 
-    Page<PaymentEntity> findAllByBookingId(Long bookingId, Pageable pageable);
+    Page<PaymentEntity> findAllByBookingIdAndUserId(Long bookingId, UUID userId, Pageable pageable);
 }

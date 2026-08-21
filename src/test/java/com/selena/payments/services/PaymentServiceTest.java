@@ -6,6 +6,7 @@ import com.selena.payments.entities.PaymentEntity;
 import com.selena.payments.entities.PaymentStatus;
 import com.selena.payments.exceptions.BusinessException;
 import com.selena.payments.exceptions.IdempotencyConflictException;
+import com.selena.payments.integration.PaymentIntegrationService;
 import com.selena.payments.mappers.PaymentMapper;
 import com.selena.payments.outbox.PaymentEventType;
 import com.selena.payments.outbox.PaymentOutboxPublisher;
@@ -47,6 +48,9 @@ class PaymentServiceTest {
     @Mock
     private PaymentOutboxPublisher paymentOutboxPublisher;
 
+    @Mock
+    private PaymentIntegrationService paymentIntegrationService;
+
     @InjectMocks
     private PaymentService paymentService;
 
@@ -57,13 +61,15 @@ class PaymentServiceTest {
     @BeforeEach
     void setUp() {
         paymentMapper = new PaymentMapper();
-        paymentService = new PaymentService(paymentRepository, paymentMapper, paymentProvider, paymentOutboxPublisher);
+        paymentService = new PaymentService(paymentRepository, paymentMapper, paymentProvider,
+                paymentOutboxPublisher, paymentIntegrationService);
         request = validRequest();
         idempotencyKey = UUID.randomUUID();
     }
 
     @Test
     void createPayment_shouldCreatePaymentAndCallProvider() {
+        UUID authenticatedUserId = request.getUserId();
         when(paymentRepository.findByUserIdAndIdempotencyKey(request.getUserId(), idempotencyKey))
                 .thenReturn(Optional.empty());
         when(paymentProvider.process(any())).thenReturn(new PaymentProviderResult(
@@ -74,7 +80,7 @@ class PaymentServiceTest {
         ));
         when(paymentRepository.save(any(PaymentEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        PaymentResponse response = paymentService.createPayment(request, idempotencyKey);
+        PaymentResponse response = paymentService.createPayment(request, idempotencyKey, authenticatedUserId);
 
         ArgumentCaptor<PaymentEntity> captor = ArgumentCaptor.forClass(PaymentEntity.class);
         verify(paymentProvider).process(any());
@@ -95,11 +101,12 @@ class PaymentServiceTest {
 
     @Test
     void createPayment_shouldReturnExistingPaymentForSameIdempotencyKey() {
+        UUID authenticatedUserId = request.getUserId();
         PaymentEntity existing = payment("EUR");
         when(paymentRepository.findByUserIdAndIdempotencyKey(request.getUserId(), idempotencyKey))
                 .thenReturn(Optional.of(existing));
 
-        PaymentResponse response = paymentService.createPayment(request, idempotencyKey);
+        PaymentResponse response = paymentService.createPayment(request, idempotencyKey, authenticatedUserId);
 
         assertThat(response.id()).isEqualTo(existing.getId());
         verify(paymentProvider, never()).process(any());
@@ -108,22 +115,24 @@ class PaymentServiceTest {
 
     @Test
     void createPayment_shouldRejectChangedPayloadForExistingIdempotencyKey() {
+        UUID authenticatedUserId = request.getUserId();
         PaymentEntity existing = payment("EUR");
         request.setAmount(new BigDecimal("19.99"));
         when(paymentRepository.findByUserIdAndIdempotencyKey(request.getUserId(), idempotencyKey))
                 .thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> paymentService.createPayment(request, idempotencyKey))
+        assertThatThrownBy(() -> paymentService.createPayment(request, idempotencyKey, authenticatedUserId))
                 .isInstanceOf(IdempotencyConflictException.class);
         verify(paymentRepository, never()).save(any());
     }
 
     @Test
     void confirmPayment_shouldTransitionPendingPaymentToSucceeded() {
+        UUID authenticatedUserId = request.getUserId();
         PaymentEntity payment = payment("EUR");
         when(paymentRepository.findById(payment.getId())).thenReturn(Optional.of(payment));
 
-        PaymentResponse response = paymentService.confirmPayment(payment.getId(), "provider-tx-1");
+        PaymentResponse response = paymentService.confirmPayment(payment.getId(), "provider-tx-1", authenticatedUserId);
 
         assertThat(response.status()).isEqualTo(PaymentStatus.SUCCEEDED);
         assertThat(response.providerTransactionId()).isEqualTo("provider-tx-1");
@@ -131,32 +140,35 @@ class PaymentServiceTest {
 
     @Test
     void cancelPayment_shouldTransitionPendingPaymentToCancelled() {
+        UUID authenticatedUserId = request.getUserId();
         PaymentEntity payment = payment("EUR");
         when(paymentRepository.findById(payment.getId())).thenReturn(Optional.of(payment));
 
-        PaymentResponse response = paymentService.cancelPayment(payment.getId());
+        PaymentResponse response = paymentService.cancelPayment(payment.getId(), authenticatedUserId);
 
         assertThat(response.status()).isEqualTo(PaymentStatus.CANCELLED);
     }
 
     @Test
     void refundPayment_shouldTransitionSucceededPaymentToRefunded() {
+        UUID authenticatedUserId = request.getUserId();
         PaymentEntity payment = payment("EUR");
         payment.markSucceeded("provider-tx-1");
         when(paymentRepository.findById(payment.getId())).thenReturn(Optional.of(payment));
 
-        PaymentResponse response = paymentService.refundPayment(payment.getId());
+        PaymentResponse response = paymentService.refundPayment(payment.getId(), authenticatedUserId);
 
         assertThat(response.status()).isEqualTo(PaymentStatus.REFUNDED);
     }
 
     @Test
     void cancelPayment_shouldRejectInvalidTransition() {
+        UUID authenticatedUserId = request.getUserId();
         PaymentEntity payment = payment("EUR");
         payment.markSucceeded("provider-tx-1");
         when(paymentRepository.findById(payment.getId())).thenReturn(Optional.of(payment));
 
-        assertThatThrownBy(() -> paymentService.cancelPayment(payment.getId()))
+        assertThatThrownBy(() -> paymentService.cancelPayment(payment.getId(), authenticatedUserId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Cannot transition payment");
     }
