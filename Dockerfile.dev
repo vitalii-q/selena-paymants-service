@@ -42,8 +42,6 @@ RUN mkdir -p /opt/payments/libs && \
 # The entrypoint validates and applies Liquibase migrations before Spring Boot starts.
 COPY _docker/entrypoint.sh /app/_docker/entrypoint.sh
 RUN chmod +x /app/_docker/entrypoint.sh
-RUN mkdir -p /liquibase/db
-COPY src/main/resources/db /liquibase/db
 COPY src ./src
 
 # Expose the development HTTP port.
