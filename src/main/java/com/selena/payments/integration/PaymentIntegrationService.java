@@ -13,7 +13,7 @@ public class PaymentIntegrationService {
     }
 
     public void confirmBooking(Long bookingId, String status) {
-        String url = "http://localhost:9066/api/bookings/" + bookingId + "/status";
+        String url = "http://bookings-service:9066/api/bookings/" + bookingId + "/status";
         restTemplate.patchForObject(url, new BookingStatusUpdateRequest(status), Void.class);
     }
 

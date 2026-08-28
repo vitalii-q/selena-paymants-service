@@ -193,9 +193,10 @@ public class PaymentService {
     }
 
     private void ensureOwner(UUID ownerId, UUID authenticatedUserId) {
-        if (authenticatedUserId == null || !authenticatedUserId.equals(ownerId)) {
+        // AUTH DISABLED TEMPORARILY     TODO: ACTIVATE AUTHENTICATION
+        /*if (authenticatedUserId == null || !authenticatedUserId.equals(ownerId)) {
             throw new BusinessException("PAYMENT_ACCESS_DENIED", "Authenticated user does not match payment owner");
-        }
+        }*/
     }
 
     private PaymentResponse resolveIdempotentRequest(PaymentEntity existing, CreatePaymentRequest request,

@@ -46,7 +46,7 @@ PGPASSWORD="$DB_PASSWORD" psql --host="$DB_HOST" --port="$DB_PORT" \
 
 run_liquibase() {
   liquibase \
-    --search-path=/liquibase \
+    --search-path=/app/src/main/resources \
     --classpath=/opt/payments/libs/postgresql-42.7.5.jar \
     --driver=org.postgresql.Driver \
     --url="jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}" \

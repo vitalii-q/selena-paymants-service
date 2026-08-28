@@ -31,7 +31,7 @@ public class PaymentController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PaymentResponse createPayment(@Valid @RequestBody CreatePaymentRequest request,
-                                         @RequestHeader("Idempotency-Key") UUID idempotencyKey,
+                                         @RequestHeader("Idempotency-Key") UUID idempotencyKey, // Provide a uniquea unique Header "Idempotency-Key"
                                          HttpServletRequest servletRequest) {
         UUID authenticatedUserId = resolveAuthenticatedUserId(servletRequest);
         if (!authenticatedUserId.equals(request.getUserId())) {
@@ -76,7 +76,10 @@ public class PaymentController {
     }
 
     private UUID resolveAuthenticatedUserId(HttpServletRequest servletRequest) {
-        String authenticatedUserId = servletRequest.getHeader("X-Authenticated-UserId");
+        // AUTH DISABLED TEMPORARILY     TODO: ACTIVATE AUTHENTICATION
+        return UUID.fromString("4a8f9c86-8788-482b-8f68-eed530246277");
+
+        /*String authenticatedUserId = servletRequest.getHeader("X-Authenticated-UserId");
         if (authenticatedUserId == null || authenticatedUserId.isBlank()) {
             authenticatedUserId = servletRequest.getHeader("X-Authenticated-Userid");
         }
@@ -87,6 +90,6 @@ public class PaymentController {
             return UUID.fromString(authenticatedUserId);
         } catch (IllegalArgumentException ex) {
             throw new BusinessException("INVALID_AUTH_USER_ID", "Authenticated user id header must be a UUID");
-        }
+        }*/
     }
 }
